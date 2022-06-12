@@ -1,12 +1,8 @@
 # Replicating 10-minute fine-tuning results from wav2vec 2.0 paper
 
-We can see from Table 9 in the supplemental materials for the original wav2vec 2.0 paper [1] that the authors report being able to fine-tune the pre-trained wav2vec 2.0 model with just 10 minutes of data (from Libri-light), achieving a word error rate of 43.5 on the Librispeech clean test set without a language model. Let's see whether and if so how consistently this result can be replicated for different 10-minute samples of data
+We can see from Table 9 in the [supplemental materials](https://proceedings.neurips.cc/paper/2020/file/92d1e1eb1cd6f9fba3227870bb6d7f07-Supplemental.pdf) for the [original wav2vec 2.0 paper](https://proceedings.neurips.cc/paper/2020/file/92d1e1eb1cd6f9fba3227870bb6d7f07-Paper.pdf) that the authors report being able to fine-tune the pre-trained wav2vec 2.0 model with just 10 minutes of data (from Libri-light), achieving a word error rate of 43.5 on the Librispeech clean test set without a language model. Let's see whether and if so how consistently this result can be replicated for different 10-minute samples of Librispeech data.
 
 ![](https://user-images.githubusercontent.com/9938298/169562384-df9bbddf-0e27-41e3-9b0f-1222e990f922.png)
-
-Sources:
-- [1]: https://proceedings.neurips.cc/paper/2020/file/92d1e1eb1cd6f9fba3227870bb6d7f07-Supplemental.pdf
-- [2]: https://proceedings.neurips.cc/paper/2020/file/92d1e1eb1cd6f9fba3227870bb6d7f07-Paper.pdf
 
 ## Set up
 
