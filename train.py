@@ -204,7 +204,7 @@ def compute_metrics(pred):
     label_str = processor.tokenizer.batch_decode(pred.label_ids, group_tokens=False)
 
     scoring_df = pd.DataFrame({"pred_str"  : pred_str, "label_str" : label_str})
-    wandb.log({ "asr_out": wandb.Table(scoring_df) })
+    wandb.log({ "asr_out": wandb.Table(data=scoring_df) })
 
     print(scoring_df)
 
