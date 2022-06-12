@@ -1,0 +1,81 @@
+# Weights & Biases
+wandb:
+    entity: fauxneticien
+    project: w2v2-10min-replication
+
+env:
+    # There are some outstanding Trainer() issues that only crop up when using multiple GPUs: https://github.com/huggingface/transformers/issues/14128
+    # So force using 1 GPU (also mimics low-resource environments where multiple GPUs may not be available)
+    CUDA_VISIBLE_DEVICES: "0"
+    # Change WANDB_MODE to dryrun for development/debugging
+    WANDB_MODE: online
+
+# Dataset-related parameters
+data:
+    cache_dir: './data'
+    # How many training examples to sample from librispeech_asr.train100 (48 = ~10 minutes)
+    sample_size: 48
+    # Seed to use for sampling the data
+    sample_seed: 42
+
+# Hyper-parameters related to replication
+repl:
+    # In original paper, learning rate is warmed up for first 10% then held constant for next 40% and linearly
+    # decayed for final 50% of total steps (set using trainargs.max_steps below)
+    lr_warmup_pc: 0.1
+    lr_const_pc: 0.4
+  
+    # Global step at which to unfreeze transformer (see fine-tuning setup in original wav2vec 2.0 paper)
+    # Set to 10k by default, but set to -1 if you want to leave transformer unfrozen for whole training
+    # transformer_unfreeze_step: 10_000
+    # 
+    # Set to -1 for now (2022-06-12, initially freezing the transformer seems not to be working well ...)
+    transformer_unfreeze_step: -1
+
+# Arguments for TrainingArguments(), assuming transformers version is 4.19.2
+# https://huggingface.co/docs/transformers/v4.19.2/main_classes/trainer#transformers.TrainingArguments
+trainargs:
+    seed: 4892
+    output_dir: .
+    learning_rate: 1e-4
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 4
+    logging_steps: 100
+    eval_steps: 400
+    save_steps: 400
+    save_total_limit: 1
+    load_best_model_at_end: True
+    max_steps: 12_000
+    # Use adamw_bnb_8bit to make fine-tuning possible using GPU with only 16 GB of VRAM in low-budget/-resource settings
+    # Tested with transformers 4.19.2 (should have 'adamw_bnb_8bit')
+    optim: adamw_bnb_8bit
+    fp16: True
+    metric_for_best_model: wer
+    greater_is_better: False
+    dataloader_num_workers: 2
+    group_by_length: True
+    evaluation_strategy: steps
+    report_to: wandb
+
+w2v2:
+    # Arguments for Wav2Vec2Processor()
+    # https://huggingface.co/docs/transformers/v4.19.2/model_doc/wav2vec2#transformers.Wav2Vec2Processor
+    proc:
+
+    # Arguments for Wav2Vec2CTCTokenizer()
+    # https://huggingface.co/docs/transformers/v4.19.2/model_doc/wav2vec2#transformers.Wav2Vec2CTCTokenizer
+    tok:
+        vocab_file: vocab.json
+
+    # Arguments for Wav2Vec2FeatureExtractor()
+    # https://huggingface.co/docs/transformers/v4.19.2/model_doc/wav2vec2#transformers.Wav2Vec2FeatureExtractor
+    fext:
+        return_attention_mask: True
+    
+    # Arguments for Wav2Vec2ForCTC(), i.e. model
+    # https://huggingface.co/docs/transformers/v4.19.2/model_doc/wav2vec2#transformers.Wav2Vec2ForCTC
+    model:
+        pretrained_model_name_or_path: facebook/wav2vec2-large
+        mask_time_prob: 0.075
+        # Assuming authors are using 'channel' to mean the feature axis (vs. time axis)
+        mask_feature_prob: 0.008
