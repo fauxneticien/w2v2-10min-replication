@@ -33,14 +33,18 @@ for key, value in config['env'].items():
 
     os.environ[key] = value
 
-wandb.init(**config['wandb'])
+run = wandb.init(allow_val_change=True, **config['wandb'])
+
+if config.get("--run_name"):
+    # Interpolate 'lr={tranargs[learning_rate]}' to 'lr=0.0001', where config['tranargs']['learning_rate'] = 0.0001
+    run.name = config["--run_name"].format(**config)
 
 # Log hyper-parameters not automatically tracked by wandb
 # convert to in a flat (i.e. non-nested) form so that it is easily viewable on the wandb web interface
 for toplevel_key, values in config.items():
-    if toplevel_key not in ['wandb', 'trainargs', 'w2v2']:
+    if toplevel_key not in ['wandb', 'trainargs', 'w2v2'] and '--' not in toplevel_key:
         flat_dict = dict({ (f"{toplevel_key}.{key}", values) for (key, values) in values.items() })
-        wandb.config.update(flat_dict)
+        wandb.config.update(flat_dict, allow_val_change=True)
 
 """# Load datasets """
 # region (for VS Code code-folding)
@@ -65,7 +69,7 @@ for dataset, split in datasets.items():
         datasets[dataset] = hfds.load_from_disk(cache_path)
 
     else:
-        print(f"Downloading {dataset} data from {split} split of librispeech_asr/clean ...")
+        print(f"Sampling {dataset} data from {split} split of librispeech_asr/clean (sample_seed={config['data']['sample_seed']}) ...")
 
         dataset_tmp = hfds.load_dataset("librispeech_asr", "clean", split=split, streaming=True)
 
@@ -112,10 +116,10 @@ model.freeze_feature_encoder()
 
 # endregion (for VS Code code-folding)
 
-"""# Create trainer callback for gradually unfreezing layers, adapted from https://discuss.huggingface.co/t/gradual-layer-freezing/3381/4 """
+"""# Create trainer callback for replication-related procedures """
 # region (for VS Code code-folding)
 
-class FreezingCallback(hft.TrainerCallback):
+class ReplicationCallback(hft.TrainerCallback):
 
     def on_train_begin(self, args, state, control, **kwargs):
 
@@ -126,12 +130,17 @@ class FreezingCallback(hft.TrainerCallback):
                 param.requires_grad = False
 
     def on_step_begin(self, args, state, control, **kwargs):
+        # Return inf if config['repl']['max_iter'] is not set
+        if state.global_step == config['repl'].get('max_iter', float('inf')):
+            announce("Stopping training as max_iter is specififed in config.yaml > repl.max_iter ...")
+            control.should_training_stop = True
+            return
+
         if config['repl']['transformer_unfreeze_step'] > 0 and state.global_step == config['repl']['transformer_unfreeze_step']:
             print("Unfreezing transformer layers ...")
 
             for param in model.wav2vec2.parameters():
                 param.requires_grad = True
-
             # Make sure feature extractor stays frozen
             model.wav2vec2.feature_extractor._freeze_parameters()
 
@@ -263,7 +272,7 @@ trainer = ReplicationTrainer(
     train_dataset=datasets['train'],
     eval_dataset=datasets['eval'],
     tokenizer=processor.feature_extractor,
-    callbacks=[ FreezingCallback() ]
+    callbacks=[ ReplicationCallback() ]
 )
 
 announce("Beginning training")

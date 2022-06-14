@@ -1,0 +1,15 @@
+program: train.py
+method: random
+parameters:
+  data.sample_seed:
+    distribution: int_uniform
+    min: 42
+    max: 1142
+name: data.sample_seed
+description: Try different 10-minute subsets of Librispeech
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
+  - --run_name='data.sample_seed={data[sample_seed]}'

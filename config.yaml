@@ -32,6 +32,11 @@ repl:
     # Set to -1 for now (2022-06-12, initially freezing the transformer seems not to be working well ...)
     transformer_unfreeze_step: -1
 
+    # Use repl.max_iter for early stopping in hyper-parameter sweeps so that Trainer's max_steps is kept at
+    # 12_000, which is used to calculate the learning rate schedule. To turn off, comment out max_iter
+    # or set to -1 from command line 'python train.py repl.max_iter=-1'
+    max_iter: 2000
+
 # Arguments for TrainingArguments(), assuming transformers version is 4.19.2
 # https://huggingface.co/docs/transformers/v4.19.2/main_classes/trainer#transformers.TrainingArguments
 trainargs:
@@ -39,10 +44,11 @@ trainargs:
     output_dir: .
     learning_rate: 1e-4
     per_device_train_batch_size: 2
+    per_device_eval_batch_size: 2
     gradient_accumulation_steps: 4
     logging_steps: 100
-    eval_steps: 400
-    save_steps: 400
+    eval_steps: 100
+    save_steps: 100
     save_total_limit: 1
     load_best_model_at_end: True
     max_steps: 12_000
