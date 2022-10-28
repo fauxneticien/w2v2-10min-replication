@@ -17,7 +17,7 @@ def announce(announcement):
 
 # Overwrite config vars in config.yaml with anything supplied in the command line
 config = oc.OmegaConf.merge(
-    oc.OmegaConf.load("config_inlp-jv-id-su.yaml"),
+    oc.OmegaConf.load("config.yaml"),
     oc.OmegaConf.from_cli()
 )
 
@@ -107,9 +107,16 @@ processor = hft.Wav2Vec2Processor(
     **(config['w2v2']['proc'] or {})
 )
 
+model_config = hft.AutoConfig.from_pretrained(config['w2v2']['model']['pretrained_model_name_or_path'])
+
+config['w2v2']['model']['pad_token_id'] = processor.tokenizer.pad_token_id
+config['w2v2']['model']['ctc_zero_infinity'] = True
+
+model_config.update(config['w2v2']['model'])
+
 model = hft.Wav2Vec2ForCTC.from_pretrained(
-    pad_token_id=processor.tokenizer.pad_token_id,
-    **(config['w2v2']['model'] or {})
+    config['w2v2']['model']['pretrained_model_name_or_path'],
+    config=model_config
 )
 
 model.freeze_feature_encoder()

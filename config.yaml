@@ -35,7 +35,7 @@ repl:
     # Use repl.max_iter for early stopping in hyper-parameter sweeps so that Trainer's max_steps is kept at
     # 12_000, which is used to calculate the learning rate schedule. To turn off, comment out max_iter
     # or set to -1 from command line 'python train.py repl.max_iter=-1'
-    max_iter: 12_000
+    # max_iter: -1
 
 # Arguments for TrainingArguments(), assuming transformers version is 4.19.2
 # https://huggingface.co/docs/transformers/v4.19.2/main_classes/trainer#transformers.TrainingArguments
@@ -51,7 +51,7 @@ trainargs:
     save_steps: 100
     save_total_limit: 1
     load_best_model_at_end: True
-    max_steps: 12_000
+    max_steps: 20_000
     # Use adamw_bnb_8bit to make fine-tuning possible using GPU with only 16 GB of VRAM in low-budget/-resource settings
     # Tested with transformers 4.19.2 (should have 'adamw_bnb_8bit')
     optim: adamw_bnb_8bit
