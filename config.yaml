@@ -12,11 +12,11 @@ env:
 
 # Dataset-related parameters
 data:
-    cache_dir: './data'
-    # How many training examples to sample from librispeech_asr.train100 (48 = ~10 minutes)
-    sample_size: 48
-    # Seed to use for sampling the data
-    sample_seed: 42
+    audio_col: audio
+    text_col: text
+
+    train_split: train
+    eval_split: valid
 
 # Hyper-parameters related to replication
 repl:
@@ -35,17 +35,17 @@ repl:
     # Use repl.max_iter for early stopping in hyper-parameter sweeps so that Trainer's max_steps is kept at
     # 12_000, which is used to calculate the learning rate schedule. To turn off, comment out max_iter
     # or set to -1 from command line 'python train.py repl.max_iter=-1'
-    max_iter: 2000
+    max_iter: 12_000
 
 # Arguments for TrainingArguments(), assuming transformers version is 4.19.2
 # https://huggingface.co/docs/transformers/v4.19.2/main_classes/trainer#transformers.TrainingArguments
 trainargs:
     seed: 4892
-    output_dir: .
-    learning_rate: 1e-4
+    output_dir: indo-malay-test
+    learning_rate: 5e-5
     per_device_train_batch_size: 2
     per_device_eval_batch_size: 2
-    gradient_accumulation_steps: 4
+    gradient_accumulation_steps: 8
     logging_steps: 100
     eval_steps: 100
     save_steps: 100
@@ -81,7 +81,13 @@ w2v2:
     # Arguments for Wav2Vec2ForCTC(), i.e. model
     # https://huggingface.co/docs/transformers/v4.19.2/model_doc/wav2vec2#transformers.Wav2Vec2ForCTC
     model:
-        pretrained_model_name_or_path: facebook/wav2vec2-large
-        mask_time_prob: 0.075
+        pretrained_model_name_or_path: facebook/wav2vec2-xls-r-300m
+        mask_time_prob: 0.4
         # Assuming authors are using 'channel' to mean the feature axis (vs. time axis)
         mask_feature_prob: 0.008
+        ctc_loss_reduction: 'mean'
+        attention_dropout: 0.094
+        activation_dropout: 0.055
+        hidden_dropout: 0.047
+        feat_proj_dropout: 0.04
+        layerdrop: 0.041

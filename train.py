@@ -17,7 +17,7 @@ def announce(announcement):
 
 # Overwrite config vars in config.yaml with anything supplied in the command line
 config = oc.OmegaConf.merge(
-    oc.OmegaConf.load("config.yaml"),
+    oc.OmegaConf.load("config_inlp-jv-id-su.yaml"),
     oc.OmegaConf.from_cli()
 )
 
@@ -51,39 +51,39 @@ for toplevel_key, values in config.items():
 
 announce("Loading data")
 
-datasets = {
-    # Splits of librispeech_asr/clean
-    # https://huggingface.co/datasets/librispeech_asr
-    'train': 'train.100',
-    'eval': 'test'
-}
+# datasets = {
+#     # Splits of librispeech_asr/clean
+#     # https://huggingface.co/datasets/librispeech_asr
+#     'train': 'train.100',
+#     'eval': 'test'
+# }
 
-for dataset, split in datasets.items():
+# for dataset, split in datasets.items():
 
-    # e.g. 'clean' if dataset is 'eval' and 'train.100_42' if 'train' (where 42 is sample_seed)
-    cache_name = split if dataset == 'eval' else f"{split}_{config['data']['sample_seed']}"
-    cache_path = os.path.join(config['data']['cache_dir'], cache_name)
+#     # e.g. 'clean' if dataset is 'eval' and 'train.100_42' if 'train' (where 42 is sample_seed)
+#     cache_name = split if dataset == 'eval' else f"{split}_{config['data']['sample_seed']}"
+#     cache_path = os.path.join(config['data']['cache_dir'], cache_name)
 
-    if os.path.isdir(cache_path):
-        print(f"Loading {dataset} data from cache in {cache_path} ...")
-        datasets[dataset] = hfds.load_from_disk(cache_path)
+#     if os.path.isdir(cache_path):
+#         print(f"Loading {dataset} data from cache in {cache_path} ...")
+#         datasets[dataset] = hfds.load_from_disk(cache_path)
 
-    else:
-        print(f"Sampling {dataset} data from {split} split of librispeech_asr/clean (sample_seed={config['data']['sample_seed']}) ...")
+#     else:
+#         print(f"Sampling {dataset} data from {split} split of librispeech_asr/clean (sample_seed={config['data']['sample_seed']}) ...")
 
-        dataset_tmp = hfds.load_dataset("librispeech_asr", "clean", split=split, streaming=True)
+#         dataset_tmp = hfds.load_dataset("librispeech_asr", "clean", split=split, streaming=True)
 
-        if dataset == 'train':
-            # Randomly sample (with seed) a subset of training data
-            dataset_tmp = dataset_tmp.shuffle(seed=config['data']['sample_seed'])
-            dataset_tmp = dataset_tmp.take(n=config['data']['sample_size'])
+#         if dataset == 'train':
+#             # Randomly sample (with seed) a subset of training data
+#             dataset_tmp = dataset_tmp.shuffle(seed=config['data']['sample_seed'])
+#             dataset_tmp = dataset_tmp.take(n=config['data']['sample_size'])
 
-        # Use list() to download the data since HF Trainer class does not (yet?) work with a streaming dataset of unknown length
-        dataset_tmp = list(dataset_tmp)
+#         # Use list() to download the data since HF Trainer class does not (yet?) work with a streaming dataset of unknown length
+#         dataset_tmp = list(dataset_tmp)
 
-        # Convert back to a dataset object and save
-        datasets[dataset] = hfds.Dataset.from_pandas(pd.DataFrame(dataset_tmp))
-        datasets[dataset].save_to_disk(cache_path)
+#         # Convert back to a dataset object and save
+#         datasets[dataset] = hfds.Dataset.from_pandas(pd.DataFrame(dataset_tmp))
+#         datasets[dataset].save_to_disk(cache_path)
 
 # endregion (for VS Code code-folding)
 
@@ -152,16 +152,28 @@ class ReplicationCallback(hft.TrainerCallback):
 announce("Preparing data for model")
 
 def to_inputs_and_labels(batch, processor=processor):
-  batch["input_values"] = processor(batch["audio"]["array"], sampling_rate=16000).input_values[0]
-
-  with processor.as_target_processor():
-    batch["labels"] = processor(batch["text"]).input_ids
-
-  return batch
+    batch["input_values"] = processor(batch["audio"], sampling_rate=16000).input_values[0]
+    
+    batch["labels"] = processor.tokenizer(batch["text"]).input_ids
+    
+    return batch
 
 # Convert to DatasetDict to make map() method available
-datasets = hfds.DatasetDict(datasets)
-datasets = datasets.map(to_inputs_and_labels, remove_columns=['file', 'audio', 'text', 'id', 'speaker_id', 'chapter_id'])
+# datasets = hfds.DatasetDict(datasets)
+
+def tsv2ds(tsv_path):
+    import soundfile as sf
+    df = pd.read_csv(tsv_path, sep='\t')
+    
+    df['audio'] = df.path.apply(lambda x: sf.read(x)[0])
+    df = df[df.audio.apply(lambda x: len(x)/16_000) < 10].copy().reset_index(drop=True)
+
+    return hfds.Dataset.from_pandas(df[['audio', 'text']])
+
+datasets = hfds.DatasetDict(dict([ (k, tsv2ds(v)) for k, v in {'train' : 'train.tsv', 'valid' : 'valid.tsv'}.items() ]))
+# datasets = datasets.rename_column('path', 'audio').cast_column('audio', hfds.Audio())
+
+datasets = datasets.map(to_inputs_and_labels, remove_columns=['audio', 'text'])
 
 @dataclasses.dataclass
 class DataCollatorCTCWithPadding:
@@ -180,12 +192,12 @@ class DataCollatorCTCWithPadding:
             padding=self.padding,
             return_tensors="pt",
         )
-        with self.processor.as_target_processor():
-            labels_batch = self.processor.pad(
-                label_features,
-                padding=self.padding,
-                return_tensors="pt",
-            )
+
+        labels_batch = self.processor.tokenizer.pad(
+            label_features,
+            padding=self.padding,
+            return_tensors="pt",
+        )
 
         # replace padding with -100 to ignore loss correctly
         labels = labels_batch["input_ids"].masked_fill(labels_batch.attention_mask.ne(1), -100)
@@ -270,7 +282,7 @@ trainer = ReplicationTrainer(
     args=hft.TrainingArguments(**config['trainargs']),
     compute_metrics=compute_metrics,
     train_dataset=datasets['train'],
-    eval_dataset=datasets['eval'],
+    eval_dataset=datasets['valid'],
     tokenizer=processor.feature_extractor,
     callbacks=[ ReplicationCallback() ]
 )
